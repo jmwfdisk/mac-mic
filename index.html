@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#111111">
+<title>Mac Mic</title>
+<style>
+  :root {
+    --bg: #111;
+    --card: #1c1c1c;
+    --line: #2c2c2c;
+    --text: #f2f2f2;
+    --muted: #9a9a9a;
+    --on: #ff4d3d;
+    --ok: #3ddc84;
+    --radius: 18px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main { width: 100%; max-width: 440px; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; margin: 8px 0 4px; }
+  p { margin: 0; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px;
+  }
+  button, .btn {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 600;
+    padding: 14px 20px;
+    width: 100%;
+    cursor: pointer;
+    background: var(--text);
+    color: var(--bg);
+  }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button.danger { background: transparent; color: var(--on); border: 1px solid #4a2320; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; margin-top: 12px; }
+  .row > * { flex: 1; }
+  input {
+    width: 100%;
+    font: inherit;
+    padding: 14px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+    text-transform: lowercase;
+  }
+  .status { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: var(--on); box-shadow: 0 0 0 0 rgba(255,77,61,.6); animation: pulse 1.6s infinite; }
+  .dot.ok { background: var(--ok); }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(255,77,61,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,61,0); } }
+  .meter { height: 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; margin-top: 14px; }
+  .meter > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+  #qr { background: #fff; padding: 14px; border-radius: 12px; width: fit-content; margin: 16px auto 0; }
+  #qr img, #qr canvas { display: block; width: 200px; height: 200px; }
+  .link { word-break: break-all; font-size: 13px; color: var(--muted); text-align: center; margin-top: 10px; }
+  .big { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+  ul.tips { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  ul.tips li + li { margin-top: 4px; }
+  label.check { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; margin-top: 12px; }
+  label.check input { width: auto; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- 처음 화면 -->
+  <section id="home">
+    <h1>Mac Mic</h1>
+    <p class="sub">Mac 주변 소리를 핸드폰 웹 브라우저로 실시간으로 듣습니다.</p>
+
+    <div class="card">
+      <p><strong>Mac에서</strong> — 이 기기의 마이크 소리 보내기</p>
+      <div class="row"><button id="goSend">소리 보내기 시작</button></div>
+    </div>
+
+    <div class="card">
+      <p><strong>핸드폰에서</strong> — Mac 화면의 코드로 듣기</p>
+      <div class="row"><input id="codeInput" placeholder="코드 입력 (예: k7m2p9x4qa3d)" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="row"><button id="goListen" class="ghost">듣기</button></div>
+    </div>
+  </section>
+
+  <!-- 보내기 (Mac) -->
+  <section id="send" hidden>
+    <h1>보내는 중</h1>
+    <p class="sub">이 탭을 닫거나 Mac이 잠들면 전송이 멈춥니다.</p>
+
+    <div class="card">
+      <div class="status"><span class="dot" id="sendDot"></span><span id="sendStatus">준비 중…</span></div>
+      <div class="meter"><i id="sendMeter"></i></div>
+      <p class="sub" style="margin-top:10px">듣는 기기: <strong id="listenerCount">0</strong>대</p>
+    </div>
+
+    <div class="card" style="text-align:center">
+      <p>핸드폰 카메라로 QR을 찍거나 링크를 여세요</p>
+      <div id="qr"></div>
+      <p class="link" id="shareLink"></p>
+      <p class="sub" style="margin-top:6px">코드 <strong id="codeText" style="color:var(--text)"></strong></p>
+      <div class="row">
+        <button id="copyLink" class="ghost">링크 복사</button>
+        <button id="newId" class="ghost">새 주소 만들기</button>
+      </div>
+    </div>
+
+    <div class="row"><button id="stopSend" class="danger">보내기 중지</button></div>
+  </section>
+
+  <!-- 듣기 (핸드폰) -->
+  <section id="listen" hidden>
+    <h1>듣기</h1>
+    <p class="sub">코드 <span id="listenCode"></span></p>
+
+    <div class="card">
+      <div class="status"><span class="dot" id="listenDot"></span><span id="listenStatus">아래 버튼을 눌러 시작하세요</span></div>
+      <div class="meter"><i id="listenMeter"></i></div>
+      <div class="row"><button id="startListen">듣기 시작</button></div>
+      <div class="row" hidden id="tapRow"><button id="tapPlay" class="ghost">소리가 안 나면 여기를 누르세요</button></div>
+      <label class="check"><input type="checkbox" id="keepAwake" checked> 듣는 동안 화면 켜두기</label>
+    </div>
+
+    <div class="card">
+      <ul class="tips">
+        <li>소리 크기는 핸드폰 볼륨 버튼으로 조절하세요.</li>
+        <li>연결이 끊기면 자동으로 다시 연결합니다.</li>
+        <li>iPhone은 화면이 잠기면 소리가 멈출 수 있습니다.</li>
+      </ul>
+    </div>
+    <div class="row"><button id="stopListen" class="ghost">그만 듣기</button></div>
+    <audio id="player" autoplay playsinline></audio>
+  </section>
+
+</main>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  // Peer IDs live on the shared PeerJS cloud server, so a prefix keeps ours apart.
+  const PREFIX = 'macmic-v1-';
+  const ID_KEY = 'macmic-id';
+  const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const PEER_OPTS = {
+    debug: 1,
+    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const show = (name) => ['home', 'send', 'listen'].forEach((s) => { $(s).hidden = s !== name; });
+
+  function store(key, value) {
+    try {
+      if (value === undefined) return localStorage.getItem(key);
+      localStorage.setItem(key, value);
+    } catch (e) { return null; }
+  }
+
+  function randomId(len = 12) {
+    const bytes = crypto.getRandomValues(new Uint8Array(len));
+    return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('');
+  }
+
+  const cleanCode = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // ---------- Level meter (shared) ----------
+  let audioCtx;
+  function ctx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function startMeter(stream, bar) {
+    const analyser = ctx().createAnalyser();
+    analyser.fftSize = 512;
+    ctx().createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.fftSize);
+    let raf;
+    const tick = () => {
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const v of data) sum += ((v - 128) / 128) ** 2;
+      const rms = Math.sqrt(sum / data.length);
+      bar.style.width = Math.min(100, rms * 400) + '%';
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => { cancelAnimationFrame(raf); bar.style.width = '0'; };
+  }
+
+  // ---------- Screen wake lock ----------
+  let wakeLock = null;
+  let wantWake = false;
+  async function keepAwake(on) {
+    wantWake = on;
+    try {
+      if (on && !wakeLock && 'wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } else if (!on && wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    } catch (e) { /* not supported or denied — harmless */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && wantWake) keepAwake(true);
+  });
+
+  // =========================================================
+  // SENDER (Mac)
+  // =========================================================
+  const sender = { peer: null, stream: null, calls: new Map(), stopMeter: null, retry: null };
+
+  function setSendStatus(text, state) {
+    $('sendStatus').textContent = text;
+    $('sendDot').className = 'dot' + (state ? ' ' + state : '');
+  }
+
+  function updateCount() { $('listenerCount').textContent = sender.calls.size; }
+
+  function renderShare(id) {
+    const url = location.origin + location.pathname + '#' + id;
+    $('shareLink').textContent = url;
+    $('codeText').textContent = id;
+    $('qr').innerHTML = '';
+    new QRCode($('qr'), { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    return url;
+  }
+
+  async function startSend() {
+    show('send');
+    setSendStatus('마이크 권한을 허용해 주세요…');
+    try {
+      sender.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+        video: false,
+      });
+    } catch (e) {
+      setSendStatus('마이크를 쓸 수 없습니다: ' + (e.name === 'NotAllowedError' ? '권한이 거부됨 (주소창 왼쪽 자물쇠에서 허용)' : e.message));
+      return;
+    }
+    sender.stopMeter = startMeter(sender.stream, $('sendMeter'));
+    keepAwake(true);
+
+    let id = store(ID_KEY);
+    if (!id) { id = randomId(); store(ID_KEY, id); }
+    renderShare(id);
+    openSenderPeer(id);
+  }
+
+  function openSenderPeer(id) {
+    setSendStatus('서버에 연결 중…');
+    const peer = new Peer(PREFIX + id, PEER_OPTS);
+    sender.peer = peer;
+
+    peer.on('open', () => setSendStatus('방송 중 — 핸드폰에서 들을 수 있습니다', 'on'));
+
+    // Listener opens a data connection; we answer by calling it with the mic stream.
+    peer.on('connection', (conn) => {
+      conn.on('open', () => {
+        const call = peer.call(conn.peer, sender.stream);
+        sender.calls.set(conn.peer, { call, conn });
+        updateCount();
+        const drop = () => {
+          const entry = sender.calls.get(conn.peer);
+          if (!entry) return;
+          sender.calls.delete(conn.peer);
+          try { entry.call.close(); } catch (e) {}
+          try { entry.conn.close(); } catch (e) {}
+          updateCount();
+        };
+        call.on('close', drop);
+        call.on('error', drop);
+        conn.on('close', drop);
+      });
+    });
+
+    peer.on('disconnected', () => {
+      if (sender.peer !== peer) return;
+      setSendStatus('서버 연결이 끊겨 다시 연결 중…');
+      clearTimeout(sender.retry);
+      sender.retry = setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 3000);
+    });
+
+    peer.on('error', (err) => {
+      if (sender.peer !== peer) return;
+      if (err.type === 'unavailable-id') {
+        setSendStatus('이 코드는 다른 탭/기기에서 이미 보내는 중입니다. 그 탭을 닫거나 "새 주소 만들기"를 누르세요.');
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+        setSendStatus('네트워크 오류 — 다시 연결 중…');
+        clearTimeout(sender.retry);
+        sender.retry = setTimeout(() => {
+          if (sender.peer !== peer) return;
+          peer.destroy();
+          openSenderPeer(id);
+        }, 5000);
+      } else {
+        console.warn(err);
+      }
+    });
+  }
+
+  function stopSend() {
+    clearTimeout(sender.retry);
+    sender.calls.forEach(({ call, conn }) => { try { call.close(); conn.close(); } catch (e) {} });
+    sender.calls.clear();
+    updateCount();
+    if (sender.peer) { const p = sender.peer; sender.peer = null; p.destroy(); }
+    if (sender.stream) sender.stream.getTracks().forEach((t) => t.stop());
+    sender.stream = null;
+    if (sender.stopMeter) sender.stopMeter();
+    keepAwake(false);
+    show('home');
+  }
+
+  let newIdArmed = false;
+  $('newId').addEventListener('click', () => {
+    if (!newIdArmed) {
+      newIdArmed = true;
+      $('newId').textContent = '한 번 더 누르면 기존 링크가 끊깁니다';
+      setTimeout(() => { newIdArmed = false; $('newId').textContent = '새 주소 만들기'; }, 4000);
+      return;
+    }
+    newIdArmed = false;
+    $('newId').textContent = '새 주소 만들기';
+    const id = randomId();
+    store(ID_KEY, id);
+    sender.calls.forEach(({ call, conn }) => { try { call.close(); conn.close(); } catch (e) {} });
+    sender.calls.clear();
+    updateCount();
+    if (sender.peer) { const p = sender.peer; sender.peer = null; p.destroy(); }
+    renderShare(id);
+    openSenderPeer(id);
+  });
+
+  $('copyLink').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('shareLink').textContent);
+      $('copyLink').textContent = '복사됨';
+    } catch (e) {
+      $('copyLink').textContent = '직접 선택해 복사하세요';
+    }
+    setTimeout(() => { $('copyLink').textContent = '링크 복사'; }, 2000);
+  });
+
+  // =========================================================
+  // LISTENER (phone)
+  // =========================================================
+  const listener = { id: null, peer: null, conn: null, call: null, retry: null, stopMeter: null, active: false };
+  const player = $('player');
+
+  function setListenStatus(text, state) {
+    $('listenStatus').textContent = text;
+    $('listenDot').className = 'dot' + (state ? ' ' + state : '');
+  }
+
+  function openListen(id) {
+    listener.id = id;
+    $('listenCode').textContent = id;
+    show('listen');
+  }
+
+  function scheduleReconnect(msg) {
+    if (!listener.active) return;
+    setListenStatus(msg || '다시 연결 중…');
+    if (listener.stopMeter) { listener.stopMeter(); listener.stopMeter = null; }
+    clearTimeout(listener.retry);
+    listener.retry = setTimeout(connectToSender, 3000);
+  }
+
+  function connectToSender() {
+    if (!listener.active) return;
+    const peer = listener.peer;
+    if (!peer || peer.destroyed) return startListenerPeer();
+    if (peer.disconnected) { peer.reconnect(); return; }
+
+    try { if (listener.conn) listener.conn.close(); } catch (e) {}
+    setListenStatus('Mac에 연결 중…');
+    const conn = peer.connect(PREFIX + listener.id, { reliable: true });
+    listener.conn = conn;
+    conn.on('close', () => { if (listener.conn === conn) scheduleReconnect('연결이 끊겼습니다. 다시 연결 중…'); });
+    conn.on('error', () => { if (listener.conn === conn) scheduleReconnect(); });
+  }
+
+  function startListenerPeer() {
+    const peer = new Peer(PEER_OPTS);
+    listener.peer = peer;
+
+    peer.on('open', connectToSender);
+
+    peer.on('call', (call) => {
+      try { if (listener.call) listener.call.close(); } catch (e) {}
+      listener.call = call;
+      call.answer(); // receive-only
+      call.on('stream', (stream) => {
+        player.srcObject = stream;
+        const p = player.play();
+        if (p && p.catch) p.catch(() => { $('tapRow').hidden = false; });
+        if (listener.stopMeter) listener.stopMeter();
+        listener.stopMeter = startMeter(stream, $('listenMeter'));
+        setListenStatus('듣는 중', 'ok');
+      });
+      call.on('close', () => { if (listener.call === call) scheduleReconnect('Mac이 전송을 멈췄습니다. 다시 연결 중…'); });
+    });
+
+    peer.on('disconnected', () => { if (listener.peer === peer) scheduleReconnect('서버 연결이 끊겼습니다. 다시 연결 중…'); });
+
+    peer.on('error', (err) => {
+      if (listener.peer !== peer) return;
+      if (err.type === 'peer-unavailable') {
+        scheduleReconnect('Mac에서 보내기가 꺼져 있습니다. 기다리는 중…');
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+        listener.peer = null;
+        peer.destroy();
+        scheduleReconnect('네트워크 오류 — 다시 연결 중…');
+      } else {
+        console.warn(err);
+        scheduleReconnect();
+      }
+    });
+  }
+
+  $('startListen').addEventListener('click', () => {
+    // Inside the tap: unlock audio playback (needed on iOS/Android).
+    ctx();
+    const p = player.play();
+    if (p && p.catch) p.catch(() => {});
+    listener.active = true;
+    $('startListen').hidden = true;
+    keepAwake($('keepAwake').checked);
+    startListenerPeer();
+  });
+
+  $('tapPlay').addEventListener('click', () => {
+    ctx();
+    player.play().then(() => { $('tapRow').hidden = true; }).catch(() => {});
+  });
+
+  $('keepAwake').addEventListener('change', (e) => { if (listener.active) keepAwake(e.target.checked); });
+
+  $('stopListen').addEventListener('click', () => {
+    listener.active = false;
+    clearTimeout(listener.retry);
+    try { if (listener.call) listener.call.close(); } catch (e) {}
+    try { if (listener.conn) listener.conn.close(); } catch (e) {}
+    if (listener.peer) { const p = listener.peer; listener.peer = null; p.destroy(); }
+    if (listener.stopMeter) { listener.stopMeter(); listener.stopMeter = null; }
+    player.srcObject = null;
+    keepAwake(false);
+    $('startListen').hidden = false;
+    $('tapRow').hidden = true;
+    setListenStatus('멈춤. 다시 들으려면 "듣기 시작"을 누르세요');
+  });
+
+  // =========================================================
+  // Routing
+  // =========================================================
+  $('goSend').addEventListener('click', startSend);
+  $('stopSend').addEventListener('click', stopSend);
+
+  const goListen = () => {
+    const code = cleanCode($('codeInput').value);
+    if (code.length < 6) { $('codeInput').focus(); return; }
+    location.hash = code;
+  };
+  $('goListen').addEventListener('click', goListen);
+  $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') goListen(); });
+
+  function route() {
+    const code = cleanCode(location.hash.slice(1));
+    if (code) openListen(code);
+    else if (!sender.stream) show('home');
+  }
+  window.addEventListener('hashchange', route);
+
+  if (!window.Peer) {
+    document.querySelector('main').insertAdjacentHTML('afterbegin',
+      '<div class="card">라이브러리를 불러오지 못했습니다. 네트워크를 확인하고 새로고침하세요.</div>');
+  }
+  route();
+})();
+</script>
+</body>
+</html>
