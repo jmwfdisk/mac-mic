@@ -166,7 +166,17 @@
   const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
   const PEER_OPTS = {
     debug: 1,
-    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] },
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        // Free public TURN relay (OpenRelay) — needed when the two devices are on
+        // different networks (e.g. phone on LTE, Mac on Wi-Fi) and cannot connect directly.
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+      ],
+    },
   };
 
   const $ = (id) => document.getElementById(id);
@@ -401,6 +411,12 @@
 
     try { if (listener.conn) listener.conn.close(); } catch (e) {}
     setListenStatus('Mac에 연결 중…');
+    clearTimeout(listener.hintTimer);
+    listener.hintTimer = setTimeout(() => {
+      if (listener.active && !$('listenDot').className.includes('ok')) {
+        setListenStatus('연결이 오래 걸립니다 — Mac과 같은 Wi-Fi로 바꿔 다시 시도해 보세요');
+      }
+    }, 15000);
     const conn = peer.connect(PREFIX + listener.id, { reliable: true });
     listener.conn = conn;
     conn.on('close', () => { if (listener.conn === conn) scheduleReconnect('연결이 끊겼습니다. 다시 연결 중…'); });
@@ -418,6 +434,7 @@
       listener.call = call;
       call.answer(); // receive-only
       call.on('stream', (stream) => {
+        clearTimeout(listener.hintTimer);
         player.srcObject = stream;
         const p = player.play();
         if (p && p.catch) p.catch(() => { $('tapRow').hidden = false; });
@@ -466,6 +483,7 @@
   $('stopListen').addEventListener('click', () => {
     listener.active = false;
     clearTimeout(listener.retry);
+    clearTimeout(listener.hintTimer);
     try { if (listener.call) listener.call.close(); } catch (e) {}
     try { if (listener.conn) listener.conn.close(); } catch (e) {}
     if (listener.peer) { const p = listener.peer; listener.peer = null; p.destroy(); }
